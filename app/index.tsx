@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, SafeAreaView, TouchableOpacity, Alert } from "react-native";
+import { View, Text, SafeAreaView, TouchableOpacity, Alert, ScrollView } from "react-native";
 import { Link } from "expo-router";
 import { PieChart, User as UserIcon, LogOut } from "lucide-react-native";
 import CategoryButtons from "../components/CategoryButtons";
@@ -49,20 +49,31 @@ export default function Home() {
           </Link>
         </View>
 
-        {/* 1. TOP SECTION: Categories */}
-        <View className="mb-4">
+        {/* 1. TOP SECTION: Categories (Horizontal strip) */}
+        <View className="-mx-4 border-b border-slate-800/50">
           <CategoryButtons selected={selectedCategory} />
         </View>
 
-        {/* 2. MIDDLE SECTION: Panel */}
-        <View className="mb-6">
+        {/* 2. MIDDLE SECTION: The Interactive Panel */}
+        <ScrollView 
+          className="flex-1 mt-4" 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 20 }}
+        >
+          <View className="items-center mb-2">
+             <View className="bg-slate-800/50 px-4 py-1 rounded-full border border-slate-700">
+               <Text className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Active Focus</Text>
+             </View>
+          </View>
+          
           <ExpenseForm selectedCategory={selectedCategory} />
-        </View>
-
-        {/* 3. BOTTOM SECTION: Joystick */}
-        <View className="flex-1 items-center justify-center -mt-4">
-          <Joystick onSelect={setSelectedCategory} />
-        </View>
+          
+          {/* 3. BOTTOM SECTION: Peripheral Joystick Controller */}
+          <View className="items-center justify-center mt-2">
+            <Joystick onSelect={setSelectedCategory} selectedCategory={selectedCategory} />
+            <Text className="text-slate-600 text-[8px] font-bold uppercase tracking-[4px] mt-2">Precision Control</Text>
+          </View>
+        </ScrollView>
 
       </View>
     </SafeAreaView>
