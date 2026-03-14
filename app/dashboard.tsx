@@ -1,7 +1,16 @@
 import React, { useMemo } from "react";
 import { View, Text, ScrollView, Dimensions, ActivityIndicator } from "react-native";
-import { LineChart, BarChart, PieChart } from "react-native-gifted-charts";
-import { TrendingUp, PieChart as PieIcon, Calendar, CheckSquare, AlertCircle, Brain, Info, List } from "lucide-react-native";
+import { 
+  VictoryChart, 
+  VictoryLine, 
+  VictoryBar, 
+  VictoryPie, 
+  VictoryAxis, 
+  VictoryTheme, 
+  VictoryArea,
+  VictoryContainer
+} from "victory-native";
+import { TrendingUp, PieChart as PieIcon, Calendar, CheckSquare, AlertCircle, Brain, Info, List, BarChart as BarIcon } from "lucide-react-native";
 import { useExpenses, Expense } from "../hooks/useExpenses";
 
 const { width } = Dimensions.get("window");
@@ -28,7 +37,7 @@ export default function Analytics() {
       if (found) found.value += exp.amount;
     });
 
-    return last7Days.map(d => ({ value: d.value, label: d.day }));
+    return last7Days.map(d => ({ x: d.day, y: d.value }));
   }, [expenses]);
 
   // 2. Process Category Analysis Data
@@ -51,16 +60,18 @@ export default function Analytics() {
 
     if (total === 0) return [];
 
-    return Object.entries(categories).map(([label, data]) => ({
-      value: data.value,
-      color: data.color,
-      label,
-      text: `${Math.round((data.value / total) * 100)}%`
-    })).filter(d => d.value > 0);
+    return Object.entries(categories)
+      .filter(([_, data]) => data.value > 0)
+      .map(([label, data]) => ({
+        x: label,
+        y: data.value,
+        color: data.color,
+        label: `${Math.round((data.value / total) * 100)}%`
+      }));
   }, [expenses]);
 
   // 3. Process Weekly Data (Last 4 weeks)
-  const barData = useMemo(() => {
+  const weeklyData = useMemo(() => {
     const weeks = [0, 0, 0, 0];
     const now = new Date();
     
@@ -73,7 +84,32 @@ export default function Analytics() {
       }
     });
 
-    return weeks.map((val, i) => ({ value: val, label: `Wk ${i + 1}` }));
+    return weeks.map((val, i) => ({ x: `Wk ${i + 1}`, y: val }));
+  }, [expenses]);
+
+  // 4. Monthly Report Data (Last 6 months)
+  const monthlyData = useMemo(() => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const last6Months = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - (5 - i));
+      return {
+        month: months[d.getMonth()],
+        monthIdx: d.getMonth(),
+        year: d.getFullYear(),
+        y: 0
+      };
+    });
+
+    expenses.forEach(exp => {
+      const date = new Date(exp.created_at);
+      const m = date.getMonth();
+      const y = date.getFullYear();
+      const found = last6Months.find(d => d.monthIdx === m && d.year === y);
+      if (found) found.y += exp.amount;
+    });
+
+    return last6Months.map(d => ({ x: d.month, y: d.y }));
   }, [expenses]);
 
   const totalSpending = useMemo(() => 
@@ -82,175 +118,195 @@ export default function Analytics() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-[#0f172a] items-center justify-center">
+      <View className="flex-1 bg-background items-center justify-center">
         <ActivityIndicator size="large" color="#6366f1" />
-        <Text className="text-slate-400 mt-4 font-medium">Loading analytics...</Text>
+        <Text className="text-text-secondary mt-4 font-medium italic">Scanning financial data...</Text>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View className="flex-1 bg-[#0f172a] items-center justify-center px-10">
+      <View className="flex-1 bg-background items-center justify-center px-10">
         <AlertCircle size={48} color="#ef4444" />
-        <Text className="text-white text-xl font-bold mt-4">Error</Text>
-        <Text className="text-slate-400 text-center mt-2">{error}</Text>
+        <Text className="text-text-primary text-xl font-bold mt-4">System Overload</Text>
+        <Text className="text-text-secondary text-center mt-2">{error}</Text>
       </View>
     );
   }
 
+  const chartTheme = {
+    axis: {
+      style: {
+        axis: { stroke: "#334155" },
+        tickLabels: { fill: "#64748b", fontSize: 10, padding: 5 },
+        grid: { stroke: "rgba(51, 65, 85, 0.3)", strokeDasharray: "4, 4" }
+      }
+    }
+  };
+
   return (
-    <ScrollView className="flex-1 bg-[#0f172a] px-5 py-8">
+    <ScrollView className="flex-1 bg-background px-5 py-8" showsVerticalScrollIndicator={false}>
       
+      <View className="mb-10 items-center">
+        <Text className="text-text-secondary uppercase tracking-[6px] text-xs font-black">Financial Intelligence</Text>
+        <View className="h-1 w-12 bg-primary mt-2 rounded-full" />
+      </View>
+
       {/* 1. Daily Spending Line Chart */}
-      <View className="mb-10 bg-slate-900/50 p-6 rounded-3xl border border-slate-800">
-        <View className="flex-row items-center mb-6">
-          <TrendingUp size={24} color="#6366f1" />
-          <Text className="text-white text-xl font-bold ml-3">Daily Spending</Text>
+      <View className="mb-10 bg-surface/40 p-6 rounded-[40px] border border-white/5 overflow-hidden">
+        <View className="flex-row items-center mb-2">
+          <TrendingUp size={20} color="#6366f1" />
+          <Text className="text-text-primary text-lg font-bold ml-3">Daily Velocity</Text>
         </View>
-        <LineChart
-          data={lineData}
-          width={width - 100}
-          height={200}
-          color="#6366f1"
-          thickness={4}
-          startFillColor="rgba(99, 102, 241, 0.4)"
-          endFillColor="rgba(99, 102, 241, 0.01)"
-          startOpacity={1}
-          endOpacity={0}
-          noOfSections={4}
-          yAxisTextStyle={{ color: '#94a3b8' }}
-          xAxisLabelTextStyle={{ color: '#94a3b8' }}
-          hideDataPoints={false}
-          dataPointsColor="#f8fafc"
-          curved
-        />
+        <VictoryChart width={width - 80} height={220} theme={chartTheme as any} padding={{ top: 20, bottom: 40, left: 50, right: 20 }}>
+          <VictoryLine
+            data={lineData}
+            interpolation="monotoneX"
+            style={{ data: { stroke: "#6366f1", strokeWidth: 4, strokeLinecap: "round" } }}
+            animate={{ duration: 1000, onLoad: { duration: 500 } }}
+          />
+          <VictoryAxis />
+          <VictoryAxis dependentAxis tickFormat={(x: any) => `₹${x > 999 ? (x/1000).toFixed(0) + 'k' : x}`} />
+        </VictoryChart>
       </View>
 
       {/* 2. Category Pie Chart */}
-      <View className="mb-10 bg-slate-900/50 p-6 rounded-3xl border border-slate-800">
-        <View className="flex-row items-center mb-8">
-          <PieIcon size={24} color="#10b981" />
-          <Text className="text-white text-xl font-bold ml-3">Category Analysis</Text>
+      <View className="mb-10 bg-surface/40 p-6 rounded-[40px] border border-white/5">
+        <View className="flex-row items-center mb-4">
+          <PieIcon size={20} color="#10b981" />
+          <Text className="text-text-primary text-lg font-bold ml-3">Sector Analysis</Text>
         </View>
         {pieData.length > 0 ? (
-          <>
-            <View className="items-center mb-6">
-              <PieChart
-                data={pieData}
-                donut
-                sectionAutoFocus
-                radius={85}
-                innerRadius={55}
-                innerCircleColor={'#1e293b'}
-                centerLabelComponent={() => (
-                  <View className="items-center">
-                    <Text className="text-lg font-bold text-white">₹{totalSpending > 1000 ? (totalSpending/1000).toFixed(1) + 'k' : totalSpending}</Text>
-                    <Text className="text-slate-400 text-[10px]">Total</Text>
-                  </View>
-                )}
-              />
-            </View>
-            <View className="flex-row flex-wrap justify-between">
-              {pieData.map((item: any, idx) => (
-                <View key={idx} className="flex-row items-center w-[45%] mb-4">
-                  <View className="w-4 h-4 rounded-full mr-3" style={{ backgroundColor: item.color }} />
-                  <Text className="text-slate-300 text-xs" numberOfLines={1}>{item.label}</Text>
+          <View className="items-center">
+            <VictoryPie
+              data={pieData}
+              innerRadius={70}
+              width={width - 80}
+              height={280}
+              colorScale={pieData.map(d => d.color)}
+              labelRadius={100}
+              padAngle={2}
+              style={{
+                labels: { fill: "#fff", fontSize: 12, fontWeight: "bold" },
+              }}
+              animate={{ duration: 1000 }}
+            />
+            <View className="flex-row flex-wrap justify-center mt-4">
+              {pieData.map((item, idx) => (
+                <View key={idx} className="flex-row items-center mx-3 mb-2">
+                  <View className="w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: item.color }} />
+                  <Text className="text-text-secondary text-[10px] font-bold uppercase">{item.x}</Text>
                 </View>
               ))}
             </View>
-          </>
+          </View>
         ) : (
-          <View className="py-10 items-center">
-            <Text className="text-slate-500">No data for category analysis</Text>
+          <View className="py-20 items-center">
+            <Text className="text-slate-600 font-medium lowercase tracking-widest">No spectral data detected</Text>
           </View>
         )}
       </View>
 
-      {/* 3. Weekly Spending Chart */}
-      <View className="mb-10 bg-slate-900/50 p-6 rounded-3xl border border-slate-800">
-        <View className="flex-row items-center mb-6">
-          <Calendar size={24} color="#f59e0b" />
-          <Text className="text-white text-xl font-bold ml-3">Weekly Totals (₹)</Text>
+      {/* 4. Monthly Report (Area Chart) */}
+      <View className="mb-10 bg-surface/40 p-6 rounded-[40px] border border-white/5">
+        <View className="flex-row items-center mb-2">
+          <BarIcon size={20} color="#8b5cf6" />
+          <Text className="text-text-primary text-lg font-bold ml-3">Monthly Trajectory</Text>
         </View>
-        <BarChart
-          data={barData}
-          width={width - 100}
-          height={200}
-          barWidth={40}
-          frontColor="#f59e0b"
-          roundedTop
-          noOfSections={4}
-          yAxisTextStyle={{ color: '#94a3b8' }}
-          xAxisLabelTextStyle={{ color: '#94a3b8' }}
-          barBorderRadius={8}
-        />
+        <VictoryChart width={width - 80} height={220} theme={chartTheme as any} padding={{ top: 20, bottom: 40, left: 50, right: 20 }}>
+          <VictoryArea
+            data={monthlyData}
+            interpolation="cardinal"
+            style={{ 
+              data: { 
+                fill: "rgba(139, 92, 246, 0.2)", 
+                stroke: "#8b5cf6", 
+                strokeWidth: 3 
+              } 
+            }}
+            animate={{ duration: 1500 }}
+          />
+          <VictoryAxis />
+          <VictoryAxis dependentAxis tickFormat={(x: any) => `₹${x > 999 ? (x/1000).toFixed(0) + 'k' : x}`} />
+        </VictoryChart>
       </View>
 
-      {/* 4. AI Insights Section */}
-      <View className="mb-10 bg-indigo-900/40 p-6 rounded-3xl border border-indigo-500/30">
+      {/* 3. Weekly Spending Chart (Bar Chart) */}
+      <View className="mb-10 bg-surface/40 p-6 rounded-[40px] border border-white/5">
+        <View className="flex-row items-center mb-2">
+          <Calendar size={20} color="#f59e0b" />
+          <Text className="text-text-primary text-lg font-bold ml-3">Weekly Quotas</Text>
+        </View>
+        <VictoryChart 
+          domainPadding={25}
+          width={width - 80} 
+          height={220} 
+          theme={chartTheme as any}
+          padding={{ top: 20, bottom: 40, left: 50, right: 20 }}
+        >
+          <VictoryBar
+            data={weeklyData}
+            style={{ 
+              data: { 
+                fill: "#f59e0b", 
+                width: 25,
+                borderRadius: 6 
+              } 
+            }}
+            animate={{ duration: 1000, onLoad: { duration: 500 } }}
+          />
+          <VictoryAxis />
+          <VictoryAxis dependentAxis tickFormat={(x: any) => `₹${x > 999 ? (x/1000).toFixed(0) + 'k' : x}`} />
+        </VictoryChart>
+      </View>
+
+      {/* AI Insights Section */}
+      <View className="mb-10 bg-indigo-900/40 p-8 rounded-[40px] border border-indigo-500/30">
         <View className="flex-row items-center mb-4">
-          <Brain size={24} color="#818cf8" />
-          <Text className="text-indigo-200 text-xl font-bold ml-3">AI Insights</Text>
+          <View className="p-2 bg-indigo-500/20 rounded-xl">
+             <Brain size={20} color="#818cf8" />
+          </View>
+          <Text className="text-indigo-200 text-xl font-bold ml-4">Neural Advisor</Text>
         </View>
-        <Text className="text-indigo-100 text-sm leading-relaxed italic">
+        <Text className="text-indigo-100 text-sm leading-relaxed font-medium opacity-90">
           {totalSpending > 15000 
-            ? "Your spending is reaching high levels this month. Consider reducing 'Unnecessary' expenses to stay within budget."
+            ? "CRITICAL: Liquidity is decreasing rapidly. High-intensity 'Unnecessary' spending detected. Calibration required."
             : totalSpending > 5000 
-            ? "You're doing great! Your 'Important' spending is balanced. Maybe allocate some towards savings?"
-            : "Low spending detected. A perfect time to plan for your future goals!"}
+            ? "STABLE: Financial velocity optimal. Sector allocation balanced. Recommend maintaining current trajectory."
+            : "OPTIMAL: Minimal drainage detected. Perfect environment for capital accumulation."}
         </Text>
-        <View className="mt-4 bg-indigo-500/20 p-3 rounded-xl flex-row items-center">
-          <Info size={16} color="#818cf8" />
-          <Text className="text-indigo-300 text-[10px] ml-2 font-medium uppercase tracking-tighter">AI Advisory Activated</Text>
+        <View className="mt-6 pt-4 border-t border-indigo-500/20 flex-row items-center">
+          <Info size={14} color="#818cf8" />
+          <Text className="text-indigo-400 text-[9px] ml-2 font-black uppercase tracking-[3px]">Secure Analysis AI</Text>
         </View>
       </View>
 
-      {/* 5. Recent Transactions List */}
-      <View className="mb-14 bg-slate-900/50 p-6 rounded-3xl border border-slate-800">
-        <View className="flex-row items-center justify-between mb-6">
+      <View className="mb-20 bg-slate-900/40 p-8 rounded-[40px] border border-white/5">
+        <View className="flex-row items-center justify-between mb-8">
           <View className="flex-row items-center">
-            <List size={22} color="#94a3b8" />
-            <Text className="text-white text-xl font-bold ml-3">Recent Items</Text>
+            <List size={20} color="#64748b" />
+            <Text className="text-text-primary text-lg font-bold ml-3">Data Stream</Text>
           </View>
-          <Text className="text-slate-500 text-xs">Latest 5</Text>
+          <View className="bg-slate-800 px-3 py-1 rounded-full">
+            <Text className="text-slate-400 text-[8px] font-black uppercase">Recent Logs</Text>
+          </View>
         </View>
         
         {expenses.slice(0, 5).map((exp) => (
-          <View key={exp.id} className="flex-row items-center justify-between py-4 border-b border-slate-800/50">
+          <View key={exp.id} className="flex-row items-center justify-between py-5 border-b border-white/5">
             <View>
-              <Text className="text-slate-200 font-bold">{exp.category}</Text>
-              <Text className="text-slate-500 text-xs">{new Date(exp.created_at).toLocaleDateString()}</Text>
+              <Text className="text-slate-200 font-bold text-sm tracking-tight">{exp.category}</Text>
+              <Text className="text-slate-500 text-[10px] uppercase font-black tracking-widest mt-1">{new Date(exp.created_at).toLocaleDateString()}</Text>
             </View>
-            <Text className="text-white font-extrabold text-lg">₹{exp.amount}</Text>
+            <View className="items-end">
+              <Text className="text-white font-black text-lg">₹{exp.amount.toLocaleString()}</Text>
+            </View>
           </View>
         ))}
         {expenses.length === 0 && (
-          <Text className="text-slate-500 text-center py-4">No transactions found</Text>
+          <Text className="text-slate-600 text-center py-10 italic">No data records found in the stack</Text>
         )}
-      </View>
-
-      {/* 6. Budget Usage Progress Chart (Dynamic) */}
-      <View className="mb-14 bg-slate-900/50 p-8 rounded-3xl border border-slate-800">
-        <View className="flex-row items-center mb-6 justify-between">
-          <View className="flex-row items-center">
-            <CheckSquare size={24} color="#ec4899" />
-            <Text className="text-white text-xl font-bold ml-3">Budget Progress</Text>
-          </View>
-          <Text className="text-pink-400 font-bold">
-            {Math.min(Math.round((totalSpending / 20000) * 100), 100)}% Used
-          </Text>
-        </View>
-        <View className="h-6 bg-slate-800 rounded-full overflow-hidden">
-          <View 
-            className="h-full bg-pink-500 shadow-lg shadow-pink-500/50" 
-            style={{ width: `${Math.min((totalSpending / 20000) * 100, 100)}%` }}
-          />
-        </View>
-        <View className="flex-row justify-between mt-4">
-          <Text className="text-slate-500">₹ {totalSpending.toLocaleString()} spent</Text>
-          <Text className="text-slate-500">₹ 20,000 budget</Text>
-        </View>
       </View>
 
     </ScrollView>
